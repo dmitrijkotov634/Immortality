@@ -1,4 +1,22 @@
 <resources>
-    <string name="app_name">Immortality</string>
+    <string name="app_name" translatable="false">Immortality</string>
     <string name="text">Text</string>
+
+    <string name="waiting">Waiting for script completion</string>
+    <string name="generation">Generation with ChatGPT</string>
+    <string name="image_generation">Image generation using OpenAI</string>
+    <string name="app_clarification">App name clarification using ChatGPT #%1$d</string>
+    <string name="contact_clarification">Contact name clarification using ChatGPT #%1$d</string>
+    <string name="execution">Code execution</string>
+
+    <string name="error">An error has occurred</string>
+    <string name="regenerate">Regenerate</string>
+    <string name="clear">Clear dialog</string>
+    <string name="question">Question</string>
+    <string name="openai_key">OpenAI Key</string>
+
+    <string name="fine">Fine</string>
+
+    <string name="stats">Statistics</string>
+    <string name="stats_message">Number of tokens: %1$d\nNumber of messages: %2$d</string>
 </resources>

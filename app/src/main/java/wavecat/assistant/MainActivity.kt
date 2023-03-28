@@ -20,6 +20,7 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import com.google.android.material.color.DynamicColors
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.*
 import org.luaj.vm2.Globals
@@ -50,18 +51,62 @@ class MainActivity : AppCompatActivity(), RecognitionListener {
 
     private var currentJob: Job? = null
 
-    private val defaultMessages = listOf(
-        Message(
-            "user",
-            buildInstruction(startPrompt = "Type welcome")
-        ),
-        Message(
-            "assistant",
-            "say(\"Welcome\")"
+    private val defaultMessages by lazy {
+        listOf(
+            Message(
+                "user",
+                buildInstruction(startPrompt = "Type welcome")
+            ),
+            Message(
+                "assistant",
+                "say(\"Welcome\")"
+            ),
+            Message(
+                "user",
+                "next track"
+            ),
+            Message(
+                "assistant",
+                "media(\"next\")"
+            ),
+            Message(
+                "user",
+                "thanks"
+            ),
+            Message(
+                "assistant",
+                "emotion(\"happiness\")\n" +
+                        "say(\"You're welcome\")"
+            ),
+            Message(
+                "user",
+                "how are you"
+            ),
+            Message(
+                "assistant",
+                "emotion(\"happiness\")\n" +
+                        "say(\"I'm fine, and you\")"
+            ),
+            Message(
+                "user",
+                getString(R.string.fine)
+            ),
+            Message(
+                "assistant",
+                "emotion(\"happiness\")"
+            ),
+            Message(
+                "user",
+                "Open browser"
+            ),
+            Message(
+                "assistant",
+                "app(\"open browser\")"
+            )
         )
-    )
+    }
 
-    private val messages: MutableList<Message> = defaultMessages.toMutableList()
+    private val messages: MutableList<Message> by lazy { defaultMessages.toMutableList() }
 
     private val debugLib = CustomDebugLib()
 
@@ -113,7 +158,7 @@ class MainActivity : AppCompatActivity(), RecognitionListener {
 
                 runBlocking {
                     withContext(Dispatchers.Main) {
-                        showProgress("Image generation using OpenAI")
+                        showProgress(getString(R.string.image_generation))
                     }
 
                     val bitmap = openAIClient.makeImageGeneration(
@@ -267,7 +312,7 @@ class MainActivity : AppCompatActivity(), RecognitionListener {
                         }
 
                         withContext(Dispatchers.Main) {
-                            showProgress("App name clarification using ChatGPT #$attempts")
+                            showProgress(getString(R.string.app_clarification, attempts))
                         }
 
                         val response = openAIClient.makeCompletion(
@@ -276,11 +321,15 @@ class MainActivity : AppCompatActivity(), RecognitionListener {
                                 listOf(
                                     Message(
                                         "user",
-                                        buildInstruction("Choose only from this list: " + appInfo.joinToString {
-                                            it.loadLabel(
-                                                packageManager
-                                            ).toString()
-                                        }, "Open app $name")
+                                        buildInstruction(
+                                            "Choose only from this list: " + appInfo.joinToString {
+                                                it.loadLabel(
+                                                    packageManager
+                                                ).toString()
+                                            },
+                                            "Open app $name",
+                                            "app(name: string) - open another app\n"
+                                        )
                                     )
                                 )
                             )
@@ -329,7 +378,7 @@ class MainActivity : AppCompatActivity(), RecognitionListener {
                         }
 
                         withContext(Dispatchers.Main) {
-                            showProgress("Contact name clarification using ChatGPT #$attempts")
+                            showProgress(getString(R.string.contact_clarification, attempts))
                         }
 
                         val response = openAIClient.makeCompletion(
@@ -338,9 +387,13 @@ class MainActivity : AppCompatActivity(), RecognitionListener {
                                 listOf(
                                     Message(
                                         "user",
-                                        buildInstruction("Choose only from this list: " + contacts.joinToString {
-                                            it.name
-                                        }, "Call $name")
+                                        buildInstruction(
+                                            "Choose only from this list: " + contacts.joinToString {
+                                                it.name
+                                            },
+                                            "Call $name",
+                                            "contact(name: string) - call or send sms\n"
+                                        )
                                     )
                                 )
                             )
@@ -372,9 +425,11 @@ class MainActivity : AppCompatActivity(), RecognitionListener {
 
     private val contacts by lazy { getContactList(mutableListOf()) }
 
-    private var maxTokens = 3000
+    private var maxTokens = 3700
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        DynamicColors.applyToActivityIfAvailable(this)
+
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
 
@@ -397,10 +452,29 @@ class MainActivity : AppCompatActivity(), RecognitionListener {
         binding.floatingActionButton.setOnClickListener { startSpeechRecognizer() }
         binding.floatingActionButton2.setOnClickListener { showDialog() }
 
+        binding.floatingActionButton2.setOnLongClickListener {
+            MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.stats)
+                .setMessage(
+                    getString(
+                        R.string.stats_message,
+                        getTokensCount(messages),
+                        messages.size
+                    )
+                )
+                .setPositiveButton(android.R.string.ok) { _, _ -> }
+                .setNegativeButton(R.string.clear) { _, _ ->
+                    messages.clear()
+                    messages.addAll(defaultMessages)
+                }
+                .show()
+            false
+        }
+
         if (preferences.getString("key", "").isNullOrEmpty()) {
             val inputBinding = TextInputBinding.inflate(layoutInflater)
             MaterialAlertDialogBuilder(this)
-                .setTitle("OpenAI Key")
+                .setTitle(getString(R.string.openai_key))
                 .setView(inputBinding.root)
                 .setPositiveButton(android.R.string.ok) { _, _ ->
                     preferences
@@ -427,20 +501,23 @@ class MainActivity : AppCompatActivity(), RecognitionListener {
 
     private fun buildInstruction(
         appInstruction: String = "",
-        startPrompt: String
+        startPrompt: String,
+        clarification: String = ""
     ): String =
         "I want you to act as a Assistant console. I will type question and you will reply Lua code. I want you to only reply using Lua code, and nothing else. do not write explanations. do not type commands unless I instruct you to do so.\n" +
                 "\n" +
                 "Documentation:\n" +
-                "say(text: string) - answer\n" +
-                "emotion(emotion: \"anger\" | \"fear\" | \"happiness\" | \"sadness\" | \"astonishment\") - shows you emotions\n" +
-                "torch(state: boolean) - turns off the flashlight\n" +
-                "wait(milliseconds: number) - waits\n" +
-                "media(emotion: \"next\" | \"previous\" | \"pause\" | \"play\") - switch music tracks\n" +
-                "picture(prompt: string) - generates a picture\n" +
-                "volume(action:  \"up\" | \"down\") - volume control\n" +
-                "app(name: string) - open another app\n" +
-                "contact(name: string) - call or send sms\n" +
+                (clarification.ifEmpty {
+                    ("say(text: string) - answer\n" +
+                            "emotion(emotion: \"anger\" | \"fear\" | \"happiness\" | \"sadness\" | \"astonishment\") - shows you emotions\n" +
+                            "torch(state: boolean) - turns off the flashlight\n" +
+                            "wait(milliseconds: number) - waits\n" +
+                            "media(emotion: \"next\" | \"previous\" | \"pause\" | \"play\") - switch music tracks\n" +
+                            "picture(prompt: string) - generates a picture\n" +
+                            "volume(action:  \"up\" | \"down\") - volume control\n" +
+                            "app(question: string) - asks to open another app\n" +
+                            "contact(question: string) - asks to call or send sms\n")
+                }) +
                 appInstruction +
                 "\n" +
                 startPrompt
@@ -512,7 +589,7 @@ class MainActivity : AppCompatActivity(), RecognitionListener {
 
     override fun onResults(bundle: Bundle?) {
         val data = bundle!!.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-        ask(data?.get(0))
+        data?.get(0)?.let { ask(it) }
     }
 
     override fun onNewIntent(intent: Intent?) {
@@ -552,32 +629,32 @@ class MainActivity : AppCompatActivity(), RecognitionListener {
         val inputBinding = TextInputBinding.inflate(layoutInflater)
         inputBinding.text.setText(text, TextView.BufferType.EDITABLE)
         MaterialAlertDialogBuilder(this)
-            .setTitle("Question")
+            .setTitle(R.string.question)
             .setView(inputBinding.root)
             .setPositiveButton(android.R.string.ok) { _, _ ->
-                ask(inputBinding.text.text.toString())
+                ask(inputBinding.text.text.toString().trim())
             }
             .show()
     }
 
-    private fun ask(text: String?) {
+    private fun ask(text: String) {
         binding.message.text = text
         binding.emotion.setImageResource(android.R.color.transparent)
 
-        messages.add(Message("user", text!!))
+        messages.add(Message("user", text))
         cleanup()
 
         CoroutineScope(Dispatchers.IO).launch {
             debugLib.interrupted = true
 
             withContext(Dispatchers.Main) {
-                showProgress("Waiting for script completion")
+                showProgress(getString(R.string.waiting))
             }
 
             currentJob?.join()
 
             withContext(Dispatchers.Main) {
-                showProgress("Generation with ChatGPT")
+                showProgress(getString(R.string.generation))
             }
 
             currentJob = launch(Dispatchers.IO) {
@@ -606,7 +683,7 @@ class MainActivity : AppCompatActivity(), RecognitionListener {
             binding.message.text = ""
             binding.log.text = response.choices[0].message.content
             viewContextCheck()
-            showProgress("Code execution")
+            showProgress(getString(R.string.execution))
         }
 
         exec(response.choices[0].message.content)
@@ -627,15 +704,15 @@ class MainActivity : AppCompatActivity(), RecognitionListener {
                 binding.error.visibility = View.GONE
 
                 MaterialAlertDialogBuilder(this@MainActivity)
-                    .setTitle("An error has occurred")
+                    .setTitle(R.string.error)
                     .setMessage(e.stackTraceToString())
-                    .setNegativeButton("Regenerate") { _, _ ->
+                    .setNegativeButton(R.string.regenerate) { _, _ ->
                         val prompt = messages[messages.size - 2]
                         messages.removeLast()
                         messages.removeLast()
                         showDialog(prompt.content)
                     }
-                    .setPositiveButton("Clear dialog") { _, _ ->
+                    .setPositiveButton(R.string.clear) { _, _ ->
                         messages.clear()
                         messages.addAll(defaultMessages)
                     }
@@ -644,17 +721,28 @@ class MainActivity : AppCompatActivity(), RecognitionListener {
         }
     }
 
-    private fun cleanup() {
+    private fun getTokensCount(messages: List<Message>): Int {
         var numTokens = 0
-        for (message in messages.drop(2).reversed()) {
-            numTokens += 4
+
+        for (message in messages) {
+            numTokens += 6
             numTokens += tokenizer.encode(message.role).size
             numTokens += tokenizer.encode(message.content).size
-            if (numTokens >= maxTokens) {
-                messages.remove(message)
+        }
+
+        return numTokens
+    }
+
+    private fun cleanup() {
+        var numTokens = getTokensCount(messages.drop(2).reversed())
+
+        for (message in messages.drop(2)) {
+            if (numTokens < maxTokens)
                 break
-            }
-            numTokens += 2
+            numTokens -= 6
+            numTokens -= tokenizer.encode(message.role).size
+            numTokens -= tokenizer.encode(message.content).size
+            messages.remove(message)
         }
     }
 
